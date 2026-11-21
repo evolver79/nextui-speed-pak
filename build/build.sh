@@ -9,7 +9,7 @@ docker build -q -t nextui-speed-build build >/dev/null
 docker run --rm -v "$PWD:/w" -w /w nextui-speed-build sh -c "
 set -e
 sh build/deps.sh >build/out/deps.log 2>&1 || { tail -40 build/out/deps.log; exit 1; }
-gcc -O2 -Wall -o build/out/speed src/*.c src/vendor/cJSON.c ui/dot/src/dot.c -Iui/dot/src -Isrc/vendor -Ibuild/out/prefix/include \
+gcc -O2 -Wall -o build/out/speed src/*.c ui/dot/src/dot.c -Iui/dot/src -Ibuild/out/prefix/include \
   \$(pkg-config --cflags sdl2) -Lbuild/out/prefix/lib -lmbedtls -lmbedx509 -lmbedcrypto \
   \$(pkg-config --libs sdl2) -lSDL2_ttf -lpthread -lm
 strip build/out/speed

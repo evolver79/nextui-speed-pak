@@ -7,7 +7,6 @@ build/build.sh >/dev/null
 cp build/out/speed Speed.pak/speed
 rm -rf Speed.pak/fonts && cp -r ui/dot/fonts Speed.pak/fonts
 cp deps/cacert.pem Speed.pak/cacert.pem
-cp src/vendor/LICENSE-cJSON Speed.pak/
 mkdir -p dist && rm -f dist/Speed.pak.zip
-(cd Speed.pak && zip -q -X -r ../dist/Speed.pak.zip speed launch.sh fonts cacert.pem LICENSE-cJSON)
+(cd Speed.pak && zip -q -X -r ../dist/Speed.pak.zip speed launch.sh fonts cacert.pem)
 unzip -l dist/Speed.pak.zip

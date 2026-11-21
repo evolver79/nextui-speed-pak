@@ -2,7 +2,6 @@
 // connection, four at a time (one TCP stream rarely fills a Wi-Fi link). Walk keeps two downloads going and samples
 // the Wi-Fi once a second. The UI reads a copy of the state (meter_get) every frame.
 #include "speed.h"
-#include "cJSON.h"
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -28,7 +27,6 @@ static SDL_Thread *th;
 static volatile int stopping;
 static long long total;           // bytes moved by the workers (__atomic)
 static Conn *live_conns[STREAMS];  // so stopping can cut them off
-static char jf_user[64], jf_token[160], jf_server[300];
 
 static void add_bytes(long long n) { __atomic_add_fetch(&total, n, __ATOMIC_RELAXED); }
 static long long get_bytes(void) { return __atomic_load_n(&total, __ATOMIC_RELAXED); }
@@ -71,19 +69,6 @@ void meter_targets(const char *userdata) {
   snprintf(t->up, sizeof t->up, "https://speed.cloudflare.com/__up");
   snprintf(t->ping, sizeof t->ping, "https://speed.cloudflare.com/");
 
-  // Jellyfin, with Kino's login (a folder next to ours): download only, a film as Kino would stream it untouched
-  t = &targets[T_JELLYFIN]; t->kind = T_JELLYFIN;
-  snprintf(t->name, sizeof t->name, "Jellyfin");
-  char kino[700]; snprintf(kino, sizeof kino, "%s/../Kino/jellyfin.txt", userdata);
-  if (read_kv(kino, "server", jf_server, sizeof jf_server) && read_kv(kino, "token", jf_token, sizeof jf_token) &&
-      read_kv(kino, "user_id", jf_user, sizeof jf_user) && jf_token[0]) {
-    t->ok = 1;
-    host_of(jf_server, t->detail, sizeof t->detail);
-    snprintf(t->ping, sizeof t->ping, "%s/", jf_server);
-    snprintf(t->headers, sizeof t->headers, "Authorization: MediaBrowser Client=\"Speed\", Device=\"TrimUI Brick\", "
-             "DeviceId=\"speed-brick\", Version=\"1.0\", Token=\"%s\"\r\n", jf_token);
-  } else snprintf(t->detail, sizeof t->detail, "log in with Kino first");
-
   // speed-server.py on a PC: server=http://<ip>:<port> in <userdata>/speed.txt
   t = &targets[T_SERVER]; t->kind = T_SERVER;
   snprintf(t->name, sizeof t->name, "Home server");
@@ -96,27 +81,6 @@ void meter_targets(const char *userdata) {
     snprintf(t->up, sizeof t->up, "%s/up", srv);
     snprintf(t->ping, sizeof t->ping, "%s/", srv);
   } else snprintf(t->detail, sizeof t->detail, "set server= in speed.txt");
-}
-
-// Jellyfin has no test file: the biggest of a few random films, streamed as stored
-static int jf_pick_film(Target *t) {
-  static char buf[256 * 1024];
-  char url[700];
-  snprintf(url, sizeof url, "%s/Users/%s/Items?IncludeItemTypes=Movie&Recursive=true&SortBy=Random&Limit=20&Fields=MediaSources",
-           jf_server, jf_user);
-  if (http_get(url, t->headers, buf, sizeof buf) <= 0) return 0;
-  cJSON *j = cJSON_Parse(buf), *items = cJSON_GetObjectItem(j, "Items"), *it;
-  double best = 0; char id[64] = "";
-  cJSON_ArrayForEach(it, items) {
-    cJSON *ms = cJSON_GetArrayItem(cJSON_GetObjectItem(it, "MediaSources"), 0);
-    double size = cJSON_GetNumberValue(cJSON_GetObjectItem(ms, "Size"));
-    const char *iid = cJSON_GetStringValue(cJSON_GetObjectItem(it, "Id"));
-    if (iid && size > best) { best = size; snprintf(id, sizeof id, "%s", iid); }
-  }
-  cJSON_Delete(j);
-  if (!id[0]) return 0;
-  snprintf(t->down, sizeof t->down, "%s/Videos/%s/stream?static=true&api_key=%s", jf_server, id, jf_token);
-  return 1;
 }
 
 // --- workers --------------------------------------------------------------------------------------------------------
@@ -241,7 +205,6 @@ static int test_thread(void *ud) {
   if (!set_phase(PH_PING, 3000)) return 0;
   double v[10]; int n;
   if (w.gateway[0] && (n = icmp_rtt(w.gateway, v, 8)) > 0) { double r = median(v, n, NULL); SDL_LockMutex(mx); M.router = r; SDL_UnlockMutex(mx); }
-  if (t->kind == T_JELLYFIN && !t->down[0] && !jf_pick_film(t)) { fail("Jellyfin didn't answer"); return 0; }
   if ((n = net_rtt(t->ping, v, 8)) == 0) { fail(t->kind == T_INTERNET ? "Can't reach the internet" : "Can't reach the server"); return 0; }
   double jit, p = median(v, n, &jit);
   SDL_LockMutex(mx); M.ping = p; M.jitter = jit; SDL_UnlockMutex(mx);
@@ -269,7 +232,6 @@ static int test_thread(void *ud) {
 // Walk: two downloads that never end, and once a second: Mbit/s, signal, and whether the access point changed
 static int walk_thread(void *ud) {
   Target *t = &targets[(int)(intptr_t)ud];
-  if (t->kind == T_JELLYFIN && !t->down[0] && !jf_pick_film(t)) { fail("Jellyfin didn't answer"); return 0; }
   SDL_Thread *wk[2]; Job jobs[2];
   stopping = 0; __atomic_store_n(&total, 0, __ATOMIC_RELAXED);
   for (int i = 0; i < 2; i++) { jobs[i] = (Job){ t, i, 0 }; wk[i] = SDL_CreateThread(worker, "walker", &jobs[i]); }

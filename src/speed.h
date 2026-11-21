@@ -1,5 +1,5 @@
-// Speed: how fast the TrimUI Brick's Wi-Fi really is, against the internet (Cloudflare) or the home network (Jellyfin,
-// or speed-server.py on a PC). Drawn in Dot, the shared look of Kino, Musicdisk and Tuner.
+// Speed: how fast the TrimUI Brick's Wi-Fi really is, against the internet (Cloudflare) or the home network
+// (speed-server.py on a PC). Drawn in Dot, the shared look of Kino, Musicdisk and Tuner.
 #pragma once
 #include <SDL2/SDL.h>
 
@@ -46,14 +46,14 @@ int wifi_channel(int freq);
 const char *wifi_band(int freq);     // "2.4 GHz", "5 GHz"
 
 // --- meter.c: the tests, on worker threads -------------------------------------------------------------------------
-enum { T_INTERNET, T_JELLYFIN, T_SERVER, NTARGETS };
+enum { T_INTERNET, T_SERVER, NTARGETS };
 typedef struct {
-  int kind, ok;                      // ok: usable (Jellyfin: Kino is logged in; server: set in speed.txt)
-  char name[48], detail[96];         // "Internet", "Cloudflare"; "Jellyfin", "192.168.1.20"
+  int kind, ok;                      // ok: usable (server: set in speed.txt)
+  char name[48], detail[96];         // "Internet", "Cloudflare"; "Home server", "192.168.1.20"
   char down[600], up[300], ping[300], headers[400];   // URLs ("" = can't), extra request headers
 } Target;
 extern Target targets[NTARGETS];
-void meter_targets(const char *userdata);   // finds which targets there are (Kino's Jellyfin login, speed.txt)
+void meter_targets(const char *userdata);   // finds which targets there are (speed.txt)
 
 enum { PH_IDLE, PH_PING, PH_DOWN, PH_UP, PH_DONE, PH_FAIL, PH_WALK };
 #define SAMPLES_PER_S 4

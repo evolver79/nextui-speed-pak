@@ -18,7 +18,6 @@ The Brick's 2.4 GHz Wi-Fi can show a strong signal and still not keep up with a 
 | | |
 |---|---|
 | **Internet** | Cloudflare's speed test over HTTPS. Is the line slow, or the Wi-Fi? |
-| **Jellyfin** | Your Jellyfin server, with Kino's login: a film downloaded as Kino streams it. Download only. |
 | **Home server** | `tools/speed-server.py` on any PC (Python 3, nothing to install): download and upload on the home network. Put `server=http://<PC's IP>:8080` in `.userdata/tg5040/Speed/speed.txt` on the SD card. |
 
 ## Buttons
@@ -39,5 +38,5 @@ Brick. Over SSH, `./speed <userdata> . --cli internet` runs one test without a s
 
 ## Licence
 
-MIT. Dot's fonts (Doto, Geist) are under the SIL Open Font License; mbedTLS under Apache 2.0; cJSON under MIT; the CA
+MIT. Dot's fonts (Doto, Geist) are under the SIL Open Font License; mbedTLS under Apache 2.0; the CA
 list is Mozilla's (MPL 2.0), from curl.se.

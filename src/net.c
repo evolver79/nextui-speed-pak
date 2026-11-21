@@ -6,6 +6,7 @@
 #include <mbedtls/error.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
+#include <psa/crypto.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -38,6 +39,8 @@ double now_ms(void) {
 }
 
 int net_init(const char *ca_file) {
+  // TLS 1.3 (on by default in mbedTLS 3.6) does its key exchange through PSA, which must be set up first
+  if (psa_crypto_init() != PSA_SUCCESS) { fprintf(stderr, "net: PSA crypto init failed\n"); return 0; }
   mbedtls_entropy_init(&entropy); mbedtls_ctr_drbg_init(&drbg); mbedtls_x509_crt_init(&cas); mbedtls_ssl_config_init(&conf);
   if (mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy, (const unsigned char *)"speed", 5)) return 0;
   if (mbedtls_x509_crt_parse_file(&cas, ca_file) < 0) { fprintf(stderr, "net: can't read %s\n", ca_file); return 0; }

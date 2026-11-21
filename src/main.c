@@ -29,7 +29,7 @@ static void fmt_ap(const char *bssid, char *out, int n) {   // the last three by
   snprintf(out, n, l > 8 ? "…%s" : "%s", l > 8 ? bssid + l - 8 : bssid[0] ? bssid : "—");
 }
 
-// What the slowest second means for Jellyfin films in Kino (a stream wants about 1.5 x its rate to keep its buffer up)
+// What the slowest second means for films streamed from home (Kino) (a stream wants about 1.5 x its rate to keep its buffer up)
 static const char *verdict(double low, Uint32 *col) {
   if (low >= 12) { *col = DOT_GOOD; return "Smooth for 8 Mbit/s films"; }
   if (low >= 6) { *col = DOT_GOOD; return "Smooth for 4 Mbit/s films"; }
@@ -272,7 +272,7 @@ static void shots(const char *out) {
   snprintf(w.ssid, sizeof w.ssid, "Home"); snprintf(w.bssid, sizeof w.bssid, "02:00:00:00:a1:1a");
   snprintf(w.gateway, sizeof w.gateway, "192.168.1.1");
   wifi_fake(&w);
-  targets[T_JELLYFIN].ok = 1; snprintf(targets[T_JELLYFIN].detail, sizeof targets[T_JELLYFIN].detail, "192.168.1.20");
+  targets[T_SERVER].ok = 1; snprintf(targets[T_SERVER].detail, sizeof targets[T_SERVER].detail, "192.168.1.20");
   Meter m = { 0 }; m.ping = m.jitter = m.router = m.down = m.up = m.low = -1;
   meter_fake(&m); shot(out, "test-ready");
   // mid-download: a Wi-Fi with dips
@@ -300,8 +300,8 @@ static void shots(const char *out) {
   meter_fake(&m);
   screen = SCR_HISTORY;
   for (int i = 7; i >= 0; i--) {
-    Run r = { .when = 1795000000 - i * 5400, .target = i % 3 == 2 ? T_JELLYFIN : T_INTERNET, .down = 17.0 - i * 1.7,
-              .up = i % 3 == 2 ? -1 : 5.6 - i * 0.3, .ping = 14 + i, .jitter = 3, .router = 3, .low = 7 - i * 0.8,
+    Run r = { .when = 1795000000 - i * 5400, .target = i % 3 == 2 ? T_SERVER : T_INTERNET, .down = 17.0 - i * 1.7,
+              .up = 5.6 - i * 0.3, .ping = 14 + i, .jitter = 3, .router = 3, .low = 7 - i * 0.8,
               .dbm = -49 - i * 3, .freq = 2427 };
     snprintf(r.bssid, sizeof r.bssid, i % 2 ? "02:00:00:00:b2:f6" : "02:00:00:00:a1:1a");
     history_add(&r);
@@ -309,9 +309,9 @@ static void shots(const char *out) {
   hist_sel = 1; shot(out, "history");
 }
 
-// --cli [internet|jellyfin|server]: one test without a screen, results on stdout (over SSH, or in the build container)
+// --cli [internet|server]: one test without a screen, results on stdout (over SSH, or in the build container)
 static int cli(const char *name) {
-  int t = !name || !strcmp(name, "internet") ? T_INTERNET : !strcmp(name, "jellyfin") ? T_JELLYFIN : T_SERVER;
+  int t = !name || !strcmp(name, "internet") ? T_INTERNET : T_SERVER;
   if (!targets[t].ok) { printf("%s: %s\n", targets[t].name, targets[t].detail); return 1; }
   printf("%s · %s\n", targets[t].name, targets[t].detail);
   meter_start(t);
