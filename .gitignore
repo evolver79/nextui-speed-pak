@@ -7,3 +7,6 @@ Speed.pak/fonts/
 Speed.pak/cacert.pem
 .DS_Store
 __pycache__/
+Speed.pak/LICENSE
+Speed.pak/LICENSE-mbedtls
+Speed.pak/LICENSE-cJSON

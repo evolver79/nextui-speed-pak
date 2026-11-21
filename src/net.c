@@ -78,9 +78,11 @@ static int parse_url(const char *url, int *tls, char *host, int hn, int *port, c
   return 1;
 }
 
-Conn *conn_request(const char *method, const char *url, const char *headers, long long body_len) {
-  int tls, port; char host[256]; const char *path;
-  if (!parse_url(url, &tls, host, sizeof host, &port, &path)) return NULL;
+// TCP (and TLS) to url's host; *path is set to url's path. upload: a small send buffer, so bytes counted as sent are
+// close to bytes on the air.
+static Conn *conn_open(const char *url, int upload, char *host, int hn, const char **path) {
+  int tls, port;
+  if (!parse_url(url, &tls, host, hn, &port, path)) return NULL;
   if (tls && !tls_ready) return NULL;
   char ps[8]; snprintf(ps, sizeof ps, "%d", port);
   struct addrinfo hints = { .ai_family = AF_INET, .ai_socktype = SOCK_STREAM }, *ai;
@@ -90,9 +92,7 @@ Conn *conn_request(const char *method, const char *url, const char *headers, lon
   struct timeval tv = { 10, 0 };
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
   setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
-  if (body_len > 0) {   // a small send buffer: bytes counted as sent are close to bytes on the air
-    int sb = 64 * 1024; setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sb, sizeof sb);
-  }
+  if (upload) { int sb = 64 * 1024; setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sb, sizeof sb); }
   int one = 1; setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
   if (connect(fd, ai->ai_addr, ai->ai_addrlen)) { freeaddrinfo(ai); close(fd); return NULL; }
   freeaddrinfo(ai);
@@ -109,8 +109,15 @@ Conn *conn_request(const char *method, const char *url, const char *headers, lon
         conn_close(c); return NULL;
       }
   }
+  return c;
+}
+
+Conn *conn_request(const char *method, const char *url, const char *headers, long long body_len) {
+  char host[256]; const char *path;
+  Conn *c = conn_open(url, body_len > 0, host, sizeof host, &path);
+  if (!c) return NULL;
   char req[1500];
-  int n = snprintf(req, sizeof req, "%s %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Speed (TrimUI Brick)\r\n"
+  int n = snprintf(req, sizeof req, "%s %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: " USER_AGENT "\r\n"
                    "Accept-Encoding: identity\r\nConnection: close\r\n%s", method, path, host, headers ? headers : "");
   if (body_len > 0) n += snprintf(req + n, sizeof req - n, "Content-Type: application/octet-stream\r\nContent-Length: %lld\r\n", body_len);
   n += snprintf(req + n, sizeof req - n, "\r\n");
@@ -190,7 +197,20 @@ int http_get(const char *url, const char *headers, char *buf, int n) {
   if (st != 200) { conn_close(c); return -1; }
   while (len < n - 1 && (r = conn_read(c, buf + len, n - 1 - len)) > 0) len += r;
   buf[len] = 0;
+  int chunked = c->chunked_warned;
   conn_close(c);
+  if (chunked) {   // "<hex size>\r\n<data>\r\n" ... "0\r\n\r\n": joined up in place
+    int in = 0, out = 0;
+    while (in < len) {
+      char *e; long size = strtol(buf + in, &e, 16);
+      char *nl = strstr(e, "\r\n");
+      if (!nl || size <= 0) break;
+      in = nl + 2 - buf;
+      if (in + size > len) size = len - in;
+      memmove(buf + out, buf + in, size); out += size; in += size + 2;
+    }
+    buf[out] = 0; len = out;
+  }
   return len;
 }
 
@@ -215,3 +235,4 @@ int net_rtt(const char *url, double *ms, int n) {
   freeaddrinfo(ai);
   return ok;
 }
+

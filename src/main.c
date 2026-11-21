@@ -134,14 +134,17 @@ static void draw_test(void) {
   for (; c < cols; c++) column(x0 + c * G_PITCH, y0, 0, 0);
 
   if (busy) { DotHint h[] = { { "B", "Stop" } }; dot_dock(dot, h, 1); }
-  else { DotHint h[] = { { "A", m.phase == PH_IDLE ? "Test" : "Again" }, { "L1 R1", "Target" }, { "X", "Walk" }, { "Y", "History" } };
-         dot_dock(dot, h, 4); }
+  else {   // Internet: UP/DOWN picks the location (walk is the home server's, so X gives its place up)
+    DotHint h[] = { { "A", m.phase == PH_IDLE ? "Test" : "Again" }, { "L1 R1", "Target" },
+                    target == T_INTERNET ? (DotHint){ "↑↓", "Location" } : (DotHint){ "X", "Walk" }, { "Y", "History" } };
+    dot_dock(dot, h, 4);
+  }
 }
 
 // --- walk screen --------------------------------------------------------------------------------------------------------
 static void draw_walk(void) {
   Meter m; meter_get(&m);
-  const Target *t = &targets[target];
+  const Target *t = &targets[T_SERVER];   // walk runs against the home server only (see meter.c)
   char hdr[160], num[16], s[80];
   Uint32 secs = (SDL_GetTicks() - walk_t0) / 1000;
   snprintf(hdr, sizeof hdr, "%s · %u:%02u", t->name, secs / 60, secs % 60);
@@ -244,10 +247,25 @@ static void on_button(int b) {
   case BTN_A:
     if (!targets[target].ok) { show_toast(targets[target].detail); break; }
     meter_start(target); break;
-  case BTN_X:
-    if (!targets[target].ok) { show_toast(targets[target].detail); break; }
-    meter_walk(target); walk_t0 = SDL_GetTicks(); screen = SCR_WALK; break;
+  case BTN_X:   // minutes of downloading: the home server's job, not volunteers' LibreSpeed servers'
+    if (!targets[T_SERVER].ok) { show_toast("Walk needs the Home server: set server= in speed.txt"); break; }
+    meter_walk(T_SERVER); walk_t0 = SDL_GetTicks(); screen = SCR_WALK; break;
   case BTN_Y: hist_sel = hist_top = 0; screen = SCR_HISTORY; break;
+  case BTN_UP: case BTN_DOWN: {   // Internet's location: Auto, then the servers nearest first
+    if (target != T_INTERNET) break;
+    int n = meter_location_count();
+    if (!n) { show_toast("Finding LibreSpeed's servers…"); break; }
+    int i = meter_location() + (b == BTN_DOWN ? 1 : -1);
+    if (i < -1) i = n - 1; else if (i >= n) i = -1;
+    meter_set_location(i);
+    char name[64], msg[96]; double ms; meter_location_name(i, name, sizeof name, &ms);
+    if (i < 0) snprintf(msg, sizeof msg, "Auto: the quickest server");
+    else if (ms >= 0) snprintf(msg, sizeof msg, "%s · %.0f ms", name, ms);
+    else snprintf(msg, sizeof msg, "%s · no answer at start", name);
+    show_toast(msg);
+    { Meter z; meter_get(&z); z.phase = PH_IDLE; meter_fake(&z); }
+    break;
+  }
   case BTN_L1: case BTN_R1: case BTN_LEFT: case BTN_RIGHT:
     meter_stop();
     target = (target + (b == BTN_L1 || b == BTN_LEFT ? NTARGETS - 1 : 1)) % NTARGETS;
@@ -273,6 +291,7 @@ static void shots(const char *out) {
   snprintf(w.gateway, sizeof w.gateway, "192.168.1.1");
   wifi_fake(&w);
   targets[T_SERVER].ok = 1; snprintf(targets[T_SERVER].detail, sizeof targets[T_SERVER].detail, "192.168.1.20");
+  snprintf(targets[T_INTERNET].detail, sizeof targets[T_INTERNET].detail, "LibreSpeed · Amsterdam");
   Meter m = { 0 }; m.ping = m.jitter = m.router = m.down = m.up = m.low = -1;
   meter_fake(&m); shot(out, "test-ready");
   // mid-download: a Wi-Fi with dips
@@ -353,6 +372,7 @@ int main(int argc, char **argv) {
   meter_targets(user);
   if (shots_dir) { shots(shots_dir); dot_quit(dot); SDL_Quit(); return 0; }
   wifi_start();
+  meter_locations_load();
   if (!targets[target].ok) target = T_INTERNET;
 
   while (running) {

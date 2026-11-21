@@ -1,4 +1,4 @@
-// Speed: how fast the TrimUI Brick's Wi-Fi really is, against the internet (Cloudflare) or the home network
+// Speed: how fast the TrimUI Brick's Wi-Fi really is, against the internet (LibreSpeed's public servers) or the home network
 // (speed-server.py on a PC). Drawn in Dot, the shared look of Kino, Musicdisk and Tuner.
 #pragma once
 #include <SDL2/SDL.h>
@@ -28,6 +28,7 @@ void conn_close(Conn *c);
 // GET into a buffer (small answers: JSON); returns the length, < 0 on failure. buf is 0-terminated.
 int http_get(const char *url, const char *headers, char *buf, int n);
 void conn_abort(Conn *c);            // from another thread: makes its blocked read or write return
+#define USER_AGENT "Speed/1.0 (TrimUI Brick; NextUI)"
 int net_rtt(const char *url, double *ms, int n);   // TCP connect round trips to url's server; how many worked
 double now_ms(void);
 
@@ -49,8 +50,8 @@ const char *wifi_band(int freq);     // "2.4 GHz", "5 GHz"
 enum { T_INTERNET, T_SERVER, NTARGETS };
 typedef struct {
   int kind, ok;                      // ok: usable (server: set in speed.txt)
-  char name[48], detail[96];         // "Internet", "Cloudflare"; "Home server", "192.168.1.20"
-  char down[600], up[300], ping[300], headers[400];   // URLs ("" = can't), extra request headers
+  char name[48], detail[96];         // "Internet", "LibreSpeed · Amsterdam"; "Home server", "192.168.1.20"
+  char down[1024], up[1024], ping[300], headers[400];   // URLs ("" = can't), extra request headers
 } Target;
 extern Target targets[NTARGETS];
 void meter_targets(const char *userdata);   // finds which targets there are (speed.txt)
@@ -71,6 +72,12 @@ typedef struct {
   float wmbit[MAX_SAMPLES]; signed char wdbm[MAX_SAMPLES]; unsigned char wroam[MAX_SAMPLES];
   int nwalk;
 } Meter;
+// Internet's location: LibreSpeed's servers, nearest first (count 0 until the list is in); -1 is Auto.
+void meter_locations_load(void);     // in the background
+int meter_location_count(void);
+int meter_location(void);
+void meter_location_name(int i, char *out, int n, double *ms);
+void meter_set_location(int i);      // remembered in location.txt
 void meter_start(int target);        // ping, download, upload (where the target has them)
 void meter_walk(int target);         // keeps downloading and sampling the Wi-Fi until meter_stop
 void meter_stop(void);
