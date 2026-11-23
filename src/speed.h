@@ -5,7 +5,6 @@
 
 #define W 1024
 #define H 768
-#define ACCENT_SPEED 0xbf7bff   // violet: the app's state dot (testing, walking)
 
 // Buttons: the Brick's face buttons are labelled the Nintendo way round, SDL names them the Xbox way.
 enum { BTN_A = SDL_CONTROLLER_BUTTON_B, BTN_B = SDL_CONTROLLER_BUTTON_A, BTN_X = SDL_CONTROLLER_BUTTON_Y,

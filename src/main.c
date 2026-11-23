@@ -15,7 +15,6 @@ static Dot *dot;
 static int screen, target, running = 1, hist_sel, hist_top;
 static char toast[120]; static Uint32 toast_until;
 static Uint32 walk_t0;
-#define INK 0x161616   // text on the grey ground
 
 static void show_toast(const char *s) { snprintf(toast, sizeof toast, "%s", s); toast_until = SDL_GetTicks() + 2600; }
 
@@ -38,8 +37,12 @@ static const char *verdict(double low, Uint32 *col) {
 }
 
 // --- graph: a dot matrix, one column per sample, lit from the bottom ----------------------------------------------------
+// Content 96-640: the two cards on top (three option rows under a heading), the graph under them, to 640.
+#define TOP_H (DOT_PAD + 26 + 20 + 2 * DOT_OPT_PITCH + DOT_OPT_H + DOT_PAD)   // 302
+#define GRAPH_Y (DOT_CONTENT_TOP + TOP_H + DOT_GAP)                          // 414
 #define G_ROWS 6
-#define G_PITCH 18
+#define G_PITCH 18    // across: a column per sample
+#define G_VPITCH 22   // up: the dots of a column
 static double nice_top(double v) {
   static const double steps[] = { 1, 2, 3, 5, 10, 15, 20, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000 };
   for (unsigned i = 0; i < sizeof steps / sizeof *steps; i++) if (v <= steps[i]) return steps[i];
@@ -49,37 +52,41 @@ static void column(int x, int y, double frac, Uint32 col) {   // y: top of the m
   int lit = (int)(frac * G_ROWS + .5);
   if (frac > 0.02 && lit == 0) lit = 1;
   for (int r = 0; r < G_ROWS; r++)
-    dot_circle(dot, x, y + (G_ROWS - 1 - r) * G_PITCH + 5, 5, r < lit ? col : DOT_TRACK);
+    dot_circle(dot, x, y + (G_ROWS - 1 - r) * G_VPITCH + 5, 5, r < lit ? col : DOT_TRACK);
 }
 
 static void graph_panel(const char *label, const char *right, int *x0, int *y0, int *cols) {
-  int y = dot_panel(dot, 40, 422, 944, 214, label);
-  if (right) dot_text(dot, DOT_LABEL_T, right, 954, 446, DOT_LABEL, DOT_RIGHT, 0);
-  *x0 = 75; *y0 = y + 2; *cols = (944 - 70) / G_PITCH + 1;
+  int h = DOT_CONTENT_BOTTOM - GRAPH_Y, gh = (G_ROWS - 1) * G_VPITCH + 10;
+  int y = dot_panel(dot, 40, GRAPH_Y, 944, h, label);
+  if (right) dot_text(dot, DOT_PANEL_T, right, 954, GRAPH_Y + DOT_PAD, DOT_LABEL, DOT_RIGHT, 0);
+  *x0 = 75; *y0 = y + (GRAPH_Y + h - DOT_PAD - y - gh) / 2; *cols = (944 - 70) / G_PITCH + 1;
 }
 
 // --- test screen --------------------------------------------------------------------------------------------------------
+// Three rows; the access point (which mesh point) goes in the heading, the walk's mesh switches in its graph.
 static void wifi_card(int walk, const Meter *m) {
   WifiInfo w; wifi_get(&w);
-  int P = DOT_OPT_PITCH, y = dot_panel(dot, 520, 96, 464, 310, walk ? "Wi-Fi now" : "Wi-Fi");
-  char s[80], ap[24];
+  char s[80], ap[24], head[48];
+  fmt_ap(w.bssid, ap, sizeof ap);
+  snprintf(head, sizeof head, "%s%s%s", walk ? "Wi-Fi now" : "Wi-Fi", w.connected ? " · " : "", w.connected ? ap : "");
+  int P = DOT_OPT_PITCH, y = dot_panel(dot, 520, DOT_CONTENT_TOP, 464, TOP_H, head);
   if (!w.connected) { dot_opt(dot, 550, y, 404, "Signal", "Not connected", 0); return; }
   snprintf(s, sizeof s, "%d dBm", w.dbm); dot_opt(dot, 550, y, 404, "Signal", s, 0);
-  snprintf(s, sizeof s, "%d · %s%s", wifi_channel(w.freq), wifi_band(w.freq), w.width >= 40 ? " · 40 MHz" : "");
-  if (w.width >= 80) snprintf(s, sizeof s, "%d · %s · %d MHz", wifi_channel(w.freq), wifi_band(w.freq), w.width);
+  // the channel width too when it fits beside the label (it doesn't at 28 px for most): the band matters more
+  snprintf(s, sizeof s, "%d · %s · %d MHz", wifi_channel(w.freq), wifi_band(w.freq), w.width);
+  if (w.width < 40 || dot_text_w(dot, DOT_VALUE, s) + dot_text_w(dot, DOT_UI, "Channel") + 24 > 404)
+    snprintf(s, sizeof s, "%d · %s", wifi_channel(w.freq), wifi_band(w.freq));
   dot_opt(dot, 550, y + P, 404, "Channel", s, 0);
-  fmt_ap(w.bssid, ap, sizeof ap);
-  dot_opt(dot, 550, y + 2 * P, 404, "Access point", ap, 0);
-  if (walk) { snprintf(s, sizeof s, "%d", w.roams); dot_opt(dot, 550, y + 3 * P, 404, "Mesh switches", s, 0); return; }
+  if (walk) { snprintf(s, sizeof s, "%d", w.roams); dot_opt(dot, 550, y + 2 * P, 404, "Mesh switches", s, 0); return; }
   if (m->router >= 0) snprintf(s, sizeof s, "%.0f ms", m->router); else snprintf(s, sizeof s, "%.0f Mbit/s", w.rate);
-  dot_opt(dot, 550, y + 3 * P, 404, m->router >= 0 ? "Router ping" : "Link rate", s, 0);
+  dot_opt(dot, 550, y + 2 * P, 404, m->router >= 0 ? "Router ping" : "Link rate", s, 0);
 }
 
 static void big_number(const char *label, int adot, const char *num, const char *unit) {
-  dot_card(dot, 40, 96, 464, 310);
+  dot_card(dot, 40, DOT_CONTENT_TOP, 464, TOP_H);
   int x = 70;
-  if (adot) { dot_adot(dot, 70, 128, adot == 1 ? dot_accent(dot) : (Uint32)adot); x = 96; }
-  dot_text(dot, DOT_LABEL_T, label, x, 122, DOT_LABEL, DOT_LEFT, 0);
+  if (adot) { dot_adot(dot, 70, DOT_CONTENT_TOP + DOT_PAD + 6, adot == 1 ? dot_accent(dot) : (Uint32)adot); x = 96; }
+  dot_text(dot, DOT_PANEL_T, label, x, DOT_CONTENT_TOP + DOT_PAD, DOT_LABEL, DOT_LEFT, 0);   // as the Wi-Fi card's heading
   int w = dot_text(dot, DOT_DISPLAY_XL, num, 64, 156, DOT_TEXT, DOT_LEFT, 0);
   if (unit) dot_text(dot, DOT_TITLE, unit, 64 + w + 14, 206, DOT_LABEL, DOT_LEFT, 0);
 }
@@ -103,10 +110,16 @@ static void draw_test(void) {
     else { fmt_mbit(busy ? m.live : m.down, num, sizeof num); big_number(lab, busy, num, "Mbit/s"); }
     // the other results on one line under the number
     char up[16], dn[16]; fmt_mbit(m.up, up, sizeof up); fmt_mbit(m.down, dn, sizeof dn);
-    int n = 0; s[0] = 0;
-    if (m.phase == PH_UP) n += snprintf(s + n, sizeof s - n, "DOWN %s · ", dn);
-    if (m.up >= 0) n += snprintf(s + n, sizeof s - n, "UP %s · ", up);
-    if (m.ping >= 0) n += snprintf(s + n, sizeof s - n, "PING %.0f ms ± %.0f", m.ping, m.jitter);
+    // shortest last: big numbers don't fit 404 px at 28 px with "ms" and the jitter, so those go first
+    for (int fit = 0; fit < 3; fit++) {
+      int n = 0; s[0] = 0;
+      if (m.phase == PH_UP) n += snprintf(s + n, sizeof s - n, "DOWN %s · ", dn);
+      if (m.up >= 0) n += snprintf(s + n, sizeof s - n, "UP %s · ", up);
+      if (m.ping >= 0) n += snprintf(s + n, sizeof s - n, fit == 0 ? "PING %.0f ms ± %.0f" : fit == 1 ? "PING %.0f ± %.0f" : "PING %.0f",
+                                     m.ping, m.jitter);
+      if (n >= 3 && !strcmp(s + n - 3, " · ")) s[n - 3] = 0;
+      if (dot_text_w(dot, DOT_VALUE, s) <= 404) break;
+    }
     dot_text(dot, DOT_VALUE, s, 70, 282, DOT_LABEL, DOT_LEFT, 404);
     if (busy) {
       double f = m.phase_len > 0 ? (now_ms() - m.phase_t0) / m.phase_len : 0;
@@ -130,7 +143,7 @@ static void draw_test(void) {
   int c = 0;
   for (int i = 0; i + 1 < m.ndown && c < cols; i += 2, c++) column(x0 + c * G_PITCH, y0, (m.sdown[i] + m.sdown[i + 1]) / 2 / top, DOT_TEXT);
   if (m.nup) c++;
-  for (int i = 0; i + 1 < m.nup && c < cols; i += 2, c++) column(x0 + c * G_PITCH, y0, (m.sup[i] + m.sup[i + 1]) / 2 / top, DOT_SERIES_3);
+  for (int i = 0; i + 1 < m.nup && c < cols; i += 2, c++) column(x0 + c * G_PITCH, y0, (m.sup[i] + m.sup[i + 1]) / 2 / top, DOT_SERIES_1);
   for (; c < cols; c++) column(x0 + c * G_PITCH, y0, 0, 0);
 
   if (busy) { DotHint h[] = { { "B", "Stop" } }; dot_dock(dot, h, 1); }
@@ -161,7 +174,7 @@ static void draw_walk(void) {
     if (!w.connected) snprintf(s, sizeof s, "NO WI-FI");
     else snprintf(s, sizeof s, "SLOWEST LAST MINUTE %s", l);
     dot_text(dot, DOT_VALUE, s, 70, 282, w.connected ? DOT_LABEL : DOT_CRITICAL, DOT_LEFT, 404);
-    dot_text(dot, DOT_BODY_S, "Walk around: watch where it drops", 70, 330, DOT_LABEL, DOT_LEFT, 404);
+    dot_text(dot, DOT_BODY_S, "Walk: watch where it drops", 70, 330, DOT_LABEL, DOT_LEFT, 404);
   }
   wifi_card(1, &m);
 
@@ -180,7 +193,7 @@ static void draw_walk(void) {
     if (m.wdbm[i]) {   // -90 dBm at the bottom row, -30 at the top
       double f = (m.wdbm[i] + 90) / 60.0; f = f < 0 ? 0 : f > 1 ? 1 : f;
       int r = (int)(f * (G_ROWS - 1) + .5);
-      dot_circle(dot, x, y0 + (G_ROWS - 1 - r) * G_PITCH + 5, 5, DOT_SERIES_2);
+      dot_circle(dot, x, y0 + (G_ROWS - 1 - r) * G_VPITCH + 5, 5, DOT_SERIES_1);
     }
     if (m.wroam[i]) dot_circle(dot, x, y0 + 5, 5, DOT_WARN);   // a mesh switch: the top dot
   }
@@ -189,13 +202,13 @@ static void draw_walk(void) {
 }
 
 // --- history ------------------------------------------------------------------------------------------------------------
-#define HIST_ROWS 6
-#define HIST_PITCH 90
+#define HIST_ROWS 5                            // 96 + 4 x 108 + 96 = 624: clear of the dock
+#define HIST_PITCH (DOT_ROW_H + 12)
 static void draw_history(void) {
   char cnt[32]; int n = history_count();
   snprintf(cnt, sizeof cnt, "%d run%s", n, n == 1 ? "" : "s");
   dot_header(dot, "SPEED · HISTORY", cnt);
-  if (!n) dot_text(dot, DOT_TITLE, "No runs yet", 70, 300, INK, DOT_LEFT, 0);
+  if (!n) dot_text(dot, DOT_TITLE, "No runs yet", 70, 300, DOT_ON_GROUND, DOT_LEFT, 0);
   if (hist_sel < hist_top) hist_top = hist_sel;
   if (hist_sel >= hist_top + HIST_ROWS) hist_top = hist_sel - HIST_ROWS + 1;
   for (int k = 0; k < HIST_ROWS && hist_top + k < n; k++) {
@@ -218,7 +231,6 @@ static void draw_history(void) {
 
 static void draw(void) {
   dot_frame(dot);
-  dot_set_accent(dot, ACCENT_SPEED);
   dot_ground(dot);
   if (screen == SCR_TEST) draw_test();
   else if (screen == SCR_WALK) draw_walk();
@@ -365,7 +377,8 @@ int main(int argc, char **argv) {
   SDL_RenderSetLogicalSize(ren, W, H);
   for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) SDL_GameControllerOpen(i);
   char p[700]; snprintf(p, sizeof p, "%s/fonts", pak);
-  if (!(dot = dot_init(ren, p, ACCENT_SPEED))) { fprintf(stderr, "fonts in %s: %s\n", p, SDL_GetError()); return 1; }
+  if (!(dot = dot_init(ren, p, DOT_ACCENT_SPEED))) { fprintf(stderr, "fonts in %s: %s\n", p, SDL_GetError()); return 1; }
+  { static const DotTheme th = DOT_THEME_SPEED; dot_set_theme(dot, &th); }   // violet evening ground, violet state dot
   snprintf(p, sizeof p, "%s/cacert.pem", pak);
   if (!net_init(p)) fprintf(stderr, "HTTPS won't work: %s\n", p);
   history_open(user);
