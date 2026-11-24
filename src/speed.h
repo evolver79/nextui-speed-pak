@@ -3,8 +3,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 
-#define W 1024
-#define H 768
+// The screen is the device's own (Brick 1024x768, Smart Pro 1280x720): DOT_W x DOT_H, from dot_screen_detect().
 
 // Buttons: the Brick's face buttons are labelled the Nintendo way round, SDL names them the Xbox way.
 enum { BTN_A = SDL_CONTROLLER_BUTTON_B, BTN_B = SDL_CONTROLLER_BUTTON_A, BTN_X = SDL_CONTROLLER_BUTTON_Y,

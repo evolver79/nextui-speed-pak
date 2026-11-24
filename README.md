@@ -1,9 +1,15 @@
 # Speed
 
-How fast the TrimUI Brick's Wi-Fi really is: a speed test for [NextUI](https://github.com/LoveRetro/NextUI), drawn in
-[Dot](https://github.com/evolver79/nextui-dotui), the shared look of Kino, Musicdisk and Tuner.
+How fast the Wi-Fi of a TrimUI Brick or Smart Pro really is: a speed test for [NextUI](https://github.com/LoveRetro/NextUI),
+drawn in [Dot](https://github.com/evolver79/nextui-dotui), the shared look of Kino, Musicdisk and Tuner.
 
 ![Speed after a test](.github/resources/screenshots/test-done.png)
+
+Tested on the TrimUI Brick and the TrimUI Smart Pro (both `tg5040`); each gets the layout for its own screen. On the
+Smart Pro:
+
+<img src=".github/resources/screenshots/smartpro-test-done.png" width="49%" alt="Speed on the Smart Pro after a test: the two cards and the graph across the wide screen">
+<img src=".github/resources/screenshots/smartpro-walk.png" width="49%" alt="Speed on the Smart Pro in walk mode">
 
 The Brick's 2.4 GHz Wi-Fi can show a strong signal and still not keep up with a film. Speed measures what gets through.
 
@@ -36,7 +42,8 @@ The Brick's 2.4 GHz Wi-Fi can show a strong signal and still not keep up with a 
 ## Building
 
 `build/build.sh` builds `build/out/speed` in an ARM64 Debian bullseye container (Docker); mbedTLS is built from source
-as a static library. `build/shots.sh` renders every screen headless into `build/out/shots/`. `deploy.sh` copies it to a
+as a static library. `build/shots.sh` renders every screen headless into `build/out/shots/` (the Smart Pro's
+with `DOT_SCREEN=1280x720 build/shots.sh`). `deploy.sh` copies it to a
 Brick. Over SSH, `./speed <userdata> . --cli internet` runs one test without a screen.
 
 ## Licence

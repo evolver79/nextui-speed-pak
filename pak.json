@@ -2,7 +2,7 @@
   "name": "Speed",
   "version": "v1.1.0",
   "type": "TOOL",
-  "description": "How fast the Brick's Wi-Fi really is: download, upload and ping against the internet or a PC at home, a walk mode that shows where the Wi-Fi gives out, and a history. Drawn in Dot, the shared look of Kino, Musicdisk and Tuner.",
+  "description": "How fast the Wi-Fi of a TrimUI Brick or Smart Pro really is: download, upload and ping against the internet or a PC at home, a walk mode that shows where the Wi-Fi gives out, and a history. Drawn in Dot, the shared look of Kino, Musicdisk and Tuner.",
   "author": "evolver79",
   "repo_url": "https://github.com/evolver79/nextui-speed-pak",
   "release_filename": "Speed.pak.zip",
